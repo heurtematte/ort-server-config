@@ -49,6 +49,30 @@ context.ortRun.jobConfigs.scanner?.let { scannerJobConfig ->
     )
 }
 
+// Inject the VulnerableCode API key if no custom server URL is configured. The key is read from the user secret
+// "vulnerableCodeApiKey", which must be defined in the organization (or product / repository) of the run.
+resolvedJobConfigs.advisor?.let { advisorConfig ->
+    if ("VulnerableCode" in advisorConfig.advisors) {
+        val vulnerableCodeConfig = (advisorConfig.config?.get("VulnerableCode") ?: ResolvablePluginConfig(emptyMap(), emptyMap())).let {
+            it.takeUnless { it.options["serverUrl"] == null || it.options["serverUrl"] == "https://public.vulnerablecode.io/api/" } ?:
+                it.copy(
+                    secrets = it.secrets + mapOf(
+                        "apiKey" to ResolvableSecret(
+                            name = "vulnerableCodeApiKey",
+                            source = SecretSource.USER
+                        )
+                    )
+                )
+        }
+
+        resolvedJobConfigs = resolvedJobConfigs.copy(
+            advisor = advisorConfig.copy(
+                config = advisorConfig.config.orEmpty() + ("VulnerableCode" to vulnerableCodeConfig)
+            )
+        )
+    }
+}
+
 validationResult = ConfigValidationResultSuccess(
     resolvedConfigurations = resolvedJobConfigs,
     labels = mapOf(
